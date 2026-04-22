@@ -205,8 +205,14 @@ for iTissue=1:length(Tissue)
                 %MR=MR+(XCAT==(iTissue)).*sind(FA)*(1-exp(-TR/T1))/(1-exp(-TR/T1)*cosd(FA));
             elseif strcmp(Contrast,'SE')        % spin echo, assume single-echo SE, with FA1=90,FA2=180
                 MR=MR+(XCAT==(iTissue)).*(1-2*exp(-(TR-TE/2)/T1)+exp(-TR/T1))*exp(-TE/T2);
+            elseif strcmp(Contrast,'SR-GRE')           % GSR-RE contrast
+                if isempty(intersect(iTissue,[31, 32, 33]))
+                    % need to dynamically define "n" here (segment index)
+                    n = 10; %n=inf --> should be same as GRE
+                    MR=MR+(XCAT==(iTissue)).*sind(FA)*(1-exp(-TR/T1))/(1-(cosd(FA)*exp(-TR/T1)))*(1-(cosd(FA)*exp(-TR/T1))^(n-1));
+                end
             else
-                errordlg('Unknown MR contrast, use only GRE, bSSFP, or SE. Returning zeros')
+                errordlg('Unknown MR contrast, use only GRE, bSSFP, SE, or SR-GRE. Returning zeros')
             end
         end
     end
