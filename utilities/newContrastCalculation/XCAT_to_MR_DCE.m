@@ -171,7 +171,9 @@ fatTissues = [34,35,72];    % spinal cord, bone marrow, fat
 
 
 MR=zeros(size(XCAT),'single');
-
+if strcmp(Contrast,'SR-GRE')  
+    MR=repmat(MR,[1 1 1 168]);
+end 
 for iTissue=1:length(Tissue)
     
     % if fat 'suppression' on, and tissue is fatty, skip MR contrast
@@ -207,9 +209,11 @@ for iTissue=1:length(Tissue)
                 MR=MR+(XCAT==(iTissue)).*(1-2*exp(-(TR-TE/2)/T1)+exp(-TR/T1))*exp(-TE/T2);
             elseif strcmp(Contrast,'SR-GRE')           % GSR-RE contrast
                 if isempty(intersect(iTissue,[31, 32, 33]))
+                    %(1-exp(-TR /T1)) / (1-cos(alpha)*exp(-TR /T1))*(1-exp(-TR/T1)*cos(8/180*pi)).^(1:168)*sin(8/180*pi)
                     % need to dynamically define "n" here (segment index)
-                    n = 10; %n=inf --> should be same as GRE
-                    MR=MR+(XCAT==(iTissue)).*sind(FA)*(1-exp(-TR/T1))/(1-(cosd(FA)*exp(-TR/T1)))*(1-(cosd(FA)*exp(-TR/T1))^(n-1));
+                    for n = 1:168 %n=inf --> should be same as GRE
+                        MR(:,:,:,n)=MR(:,:,:,n)+(XCAT==(iTissue)).*sind(FA)*(1-exp(-TR/T1))/(1-(cosd(FA)*exp(-TR/T1)))*(1-(cosd(FA)*exp(-TR/T1))^(n-1));
+                    end
                 end
             else
                 errordlg('Unknown MR contrast, use only GRE, bSSFP, SE, or SR-GRE. Returning zeros')
