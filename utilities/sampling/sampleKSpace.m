@@ -1,6 +1,14 @@
 function [kspace] = sampleKSpace(app, isCartesian, SNR)
 warning('off','all')
 
+% Optional streaming branch to avoid touching binary .mlapp files.
+% Callers can set app.useStreaming = true (or app.UseStreaming = true).
+if (isprop(app,'useStreaming') && app.useStreaming) || ...
+        (isprop(app,'UseStreaming') && app.UseStreaming)
+    [kspace] = sampleKSpace_streaming(app, isCartesian, SNR);
+    return
+end
+
 FOV = size(app.IMG_CP,1:3);
 if isCartesian
     IMGs = app.IMG_CP;
