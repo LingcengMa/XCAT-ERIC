@@ -1,5 +1,9 @@
-function kout = encodeOneReadout(IMG, app, ro, Coils, SP, isCartesian)
+function kout = encodeOneReadout(IMG, app, ro, Coils, SP, isCartesian, traj)
 %ENCODEONEREADOUT Encode exactly one readout from one generated 3D volume.
+
+if nargin < 7
+    traj = struct();
+end
 
 FOV = size(IMG);
 nCh = size(Coils,4);
@@ -18,11 +22,18 @@ if isCartesian
         kout(:,1,coil) = squeeze(K(ky,:,kz));
     end
 else
-    kx = app.kx_samples(:,ro);
-    ky = app.ky_samples(:,ro);
+    if isfield(traj,'kx')
+        kx = traj.kx(:,ro);
+        ky = traj.ky(:,ro);
+    else
+        kx = app.kx_samples(:,ro);
+        ky = app.ky_samples(:,ro);
+    end
     kz = app.kz_samples(:,ro);
+
     for coil = 1:nCh
         tmp = Coils(:,:,:,coil) .* IMG .* sliceProfile;
         kout(:,1,coil) = encodeOneNonCartesianReadout(tmp, kx, ky, kz, app);
     end
 end
+

@@ -19,6 +19,11 @@ nFE = size(app.kx_samples,1);
 kspace = complex(zeros(nFE,nReadouts,nCh,'single'));
 navigator = complex(zeros(FOV(3),nReadouts,nCh,'single'));
 
+traj = struct();
+if ~isCartesian
+    [traj.kx, traj.ky] = buildGoldenAngleTrajectory(app.kx_samples, app.ky_samples);
+end
+
 state = struct();
 h = waitbar(0,'streaming k-space generation');
 for ro = 1:nReadouts
@@ -27,7 +32,7 @@ for ro = 1:nReadouts
     end
 
     [IMG,state] = generateVolumeForReadout(app, ro, state);
-    kspace(:,ro,:) = encodeOneReadout(IMG, app, ro, Coils, SP, isCartesian);
+    kspace(:,ro,:) = encodeOneReadout(IMG, app, ro, Coils, SP, isCartesian, traj);
 
     navLine = squeeze(mean(mean(Coils .* IMG,1),2));
     navigator(:,ro,:) = fftshift(fft(navLine,[],1),1);
@@ -38,3 +43,4 @@ if SNR < 100
     NOISE = (1/SNR) * randn(size(kspace),'single') .* exp(1i*2*pi*rand(size(kspace),'single'));
     kspace = kspace + NOISE;
 end
+
