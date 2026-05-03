@@ -17,3 +17,4 @@ obj = nufft_3d(kloc2,[app.matrixAP app.matrixRL 1],'radial',1,'gpu',0);
 slIdx = currSl + app.matrixFH/2 + 1;
 kline = obj.fNUFT(squeeze(tmp2(:,:,slIdx)));
 kline = reshape(kline, [], 1);
+
