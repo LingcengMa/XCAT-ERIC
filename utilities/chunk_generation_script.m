@@ -1,4 +1,4 @@
-outDir = '/path/to/gt_chunks';
+app.gtChunkDir = '/home/lingcengma/CODE/XCAT-ERIC/results';
 nReadouts = size(app.kx_samples,2);
 framesPerChunk = 1200;
 
