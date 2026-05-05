@@ -1,5 +1,5 @@
 
-app.useGTChunkMode = true;
+%app.useGTChunkMode = true;
 outDir = '/mnt/local_raid/lingcengma/XCAT_results';
 framesPerChunk = 100;
 
@@ -30,7 +30,16 @@ if ~isscalar(nReadouts) || ~isfinite(nReadouts) || nReadouts < 1
 end
 nReadouts = round(double(nReadouts));
 
-volumeGenerator = @(app, ro, state) myGenerateGTVolume(app, ro, state);
+if exist('myGenerateGTVolume','file') == 2
+    volumeGenerator = @(app, ro, state) myGenerateGTVolume(app, ro, state);
+elseif hasAppValue(app,'IMG_CP')
+    % Legacy fallback: reuse already-generated in-memory GT frames.
+    volumeGenerator = @(app, ro, state) getLegacyFrame(app, ro);
+else
+    error(['No GT generator available. Define myGenerateGTVolume.m on MATLAB path, ' ...
+        'or populate app.IMG_CP before running this script.']);
+end
+
 writeGroundTruthChunks(app, outDir, nReadouts, framesPerChunk, volumeGenerator);
 
 app.useStreaming = true;
@@ -54,4 +63,12 @@ if isobject(appObj) || isstruct(appObj)
 else
     error('Unsupported app container type: %s', class(appObj));
 end
+end
+
+
+function IMG = getLegacyFrame(appObj, ro)
+vol4d = getAppValue(appObj,'IMG_CP');
+nFrames = size(vol4d,4);
+idx = min(max(1,round(double(ro))), nFrames);
+IMG = vol4d(:,:,:,idx);
 end
