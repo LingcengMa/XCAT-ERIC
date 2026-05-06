@@ -16,3 +16,4 @@ for ro = 1:nRO
     kxGA(:,ro) = r .* cos(phi);
     kyGA(:,ro) = r .* sin(phi);
 end
+

@@ -18,3 +18,4 @@ slIdx = currSl + app.matrixFH/2 + 1;
 kline = obj.fNUFT(squeeze(tmp2(:,:,slIdx)));
 kline = reshape(kline, [], 1);
 
+

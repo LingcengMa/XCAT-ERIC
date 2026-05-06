@@ -13,3 +13,4 @@ for ro = 1:nReadouts
     [~,idx] = min(abs(frameTimesSec - readoutTimesSec(ro)));
     roToFrame(ro) = max(1,min(nFrames,idx));
 end
+

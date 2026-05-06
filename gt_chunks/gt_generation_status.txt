@@ -1,0 +1,7 @@
+GT chunk generation started: 06-May-2026 13:12:56
+Output directory: /home/lingcengma/CODE/XCAT-ERIC/gt_chunks
+Output size: [220 152 103]
+framesPerChunk: 120
+gtMaxFrames: Inf
+Wrote /home/lingcengma/CODE/XCAT-ERIC/gt_chunks/gt_chunk_0001.mat (frames 1-120): 06-May-2026 13:23:47
+Wrote /home/lingcengma/CODE/XCAT-ERIC/gt_chunks/gt_chunk_0002.mat (frames 121-240): 06-May-2026 13:34:22
