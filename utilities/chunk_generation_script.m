@@ -40,7 +40,13 @@ else
         'or populate app.IMG_CP before running this script.']);
 end
 
+manifestPath = writeGroundTruthManifest(app, outDir, 0, framesPerChunk, ...
+    'plannedFrames', nReadouts, 'manifestStatus', 'started');
+fprintf('Initialized GT manifest before chunk generation: %s\n', manifestPath);
 writeGroundTruthChunks(app, outDir, nReadouts, framesPerChunk, volumeGenerator);
+manifestPath = writeGroundTruthManifest(app, outDir, nReadouts, framesPerChunk, ...
+    'plannedFrames', nReadouts, 'manifestStatus', 'completed');
+fprintf('Finalized GT manifest after chunk generation: %s\n', manifestPath);
 
 app.useStreaming = true;
 app.gtChunkDir = outDir;

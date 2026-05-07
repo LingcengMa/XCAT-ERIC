@@ -1,7 +1,7 @@
 outDir = '/mnt/local_raid/lingcengma/XCAT_results';
 
 app.useGTChunkMode = true;
-gtChunkDir = fullfile(outDir,'gt_chunks_test_copy');
+gtChunkDir = fullfile(outDir,'gt_chunks_test_copy_20260507');
 if ~exist(gtChunkDir,'dir')
     mkdir(gtChunkDir);
 end
@@ -41,7 +41,14 @@ end
 nReadouts = round(double(nReadouts));
 
 volumeGenerator = @(app, ro, state) myGenerateGTVolume(app, ro, state);
+
+manifestPath = writeGroundTruthManifest(app, outDir, 0, framesPerChunk, ...
+    'plannedFrames', nReadouts, 'manifestStatus', 'started');
+fprintf('Initialized GT manifest before chunk generation: %s\n', manifestPath);
 writeGroundTruthChunks(app, outDir, nReadouts, framesPerChunk, volumeGenerator);
+manifestPath = writeGroundTruthManifest(app, outDir, nReadouts, framesPerChunk, ...
+    'plannedFrames', nReadouts, 'manifestStatus', 'completed');
+fprintf('Finalized GT manifest after chunk generation: %s\n', manifestPath);
 
 app.useStreaming = true;
 app.gtChunkDir = outDir;
