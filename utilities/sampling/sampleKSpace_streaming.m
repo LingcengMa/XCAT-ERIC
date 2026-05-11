@@ -183,7 +183,16 @@ if chunkSize > 0 && chunkCount > 0
     navReadoutsChunk = chunkNavReadouts(1:chunkNavCount);
     save(chunkFile,'kspaceChunk','navigatorChunk','roRange','navReadoutsChunk','-v7.3');
 end
-
+if chunkSize > 0
+    streamManifestPath = fullfile(chunkDir,'stream_manifest.mat');
+    nStreamChunks = chunkId;
+    savedReadouts = nReadouts;
+    savedChunkSize = chunkSize;
+    savedKeepFullInMemory = keepFullInMemory;
+    save(streamManifestPath,'nStreamChunks','savedReadouts','savedChunkSize', ...
+        'savedKeepFullInMemory','navReadouts','-v7.3');
+    fprintf('Saved streaming k-space chunks to: %s\n', chunkDir);
+end
 close(h)
 
 if SNR < 100

@@ -6,14 +6,24 @@ if isCartesian
     kspace_averages = zeros([app.matrixRL size(kspace,3) prod(size(labels))],'uint8');
     kspace = single(kspace);
     %     h = waitbar(0,'sorting data...');
-    nFE = size(app.ky_samples,2);
+    nFE = min([size(app.ky_samples,2), size(app.kz_samples,2), size(kspace,2), numel(RESPPhases)]);
+    skippedReadouts = 0;
     for ro = 1:nFE
         % grab necessaryresp phase
         currPhase   = RESPPhases(ro);
         
-        % the ky and kz locations
-        currky = app.ky_samples(1,ro); currkz = app.kz_samples(1,ro);
-        
+        % the ky and kz locations. Round and validate before sub2ind so a
+        % stale/mismatched trajectory cannot crash sorting after loading GT chunks.
+        currky = round(app.ky_samples(1,ro));
+        currkz = round(app.kz_samples(1,ro));
+        if ~isfinite(currky) || ~isfinite(currkz) || ~isfinite(currPhase) || ...
+                currky < 1 || currky > size(labels,1) || ...
+                currkz < 1 || currkz > size(labels,2) || ...
+                currPhase < 1 || currPhase > size(labels,3)
+            skippedReadouts = skippedReadouts + 1;
+            continue
+        end
+
         % check to see if this readout line already has data, if yes average,
         % if no simply fill in kspace
         labelInd = sub2ind(size(labels),currky,currkz,currPhase);
@@ -22,7 +32,11 @@ if isCartesian
         kspace_averages(:,:,labelInd) = kspace_averages(:,:,labelInd) + 1;
         
     end
-    
+    if skippedReadouts > 0
+        warning('sortRespKspace:SkippedReadouts', ...
+            'Skipped %d readouts with ky/kz/resp indices outside [%d %d %d]. Recalculate trajectory after loading GT if this is unexpected.', ...
+            skippedReadouts, size(labels,1), size(labels,2), size(labels,3));
+    end
     % Normalize by number of averages
     kspace_sorted = kspace_sorted./single(kspace_averages);
     kspace_sorted(isnan(kspace_sorted)) = complex(0);     % correct for NaN because of division by zero in case of missing k-lines

@@ -2,7 +2,8 @@ function [kspaceDCESorted, trajDCESorted] = sortDCEKspace(kspace, app, isCartesi
 
 % re-sort for DCE, use timings from trajectory calculation to be consistent
 nROperFrame = app.nROperFrame;
-nFE = size(kspace,2);
+nFE = min([size(kspace,2), size(app.ky_samples,2), size(app.kz_samples,2)]);
+DCEphases = zeros(1,nFE);
 
 % WRITE LABEL
 for ii=1:app.nt
@@ -13,6 +14,7 @@ for ii=1:app.nt
     else
         idx = (nROperFrame*(ii-1)+1):nFE;
     end
+    idx = idx(idx >= 1 & idx <= nFE);
     DCEphases(idx) = ii;
 end
 
@@ -22,13 +24,22 @@ if isCartesian
     kspace_sorted = zeros([app.matrixRL size(kspace,3) prod(size(labels))],'single');
     kspace_averages = zeros([app.matrixRL size(kspace,3) prod(size(labels))],'uint8');
     kspace = single(kspace);
-    
+    skippedReadouts = 0;
     for ro = 1:nFE
         % grab necessary phase
         DCEPhase   = DCEphases(ro);
         
-        % the ky and kz locations
-        currky = app.ky_samples(1,ro); currkz = app.kz_samples(1,ro);
+        % the ky and kz locations. Round and validate before sub2ind so a
+        % stale/mismatched trajectory cannot crash sorting after loading GT chunks.
+        currky = round(app.ky_samples(1,ro));
+        currkz = round(app.kz_samples(1,ro));
+        if ~isfinite(currky) || ~isfinite(currkz) || ~isfinite(DCEPhase) || ...
+                currky < 1 || currky > size(labels,1) || ...
+                currkz < 1 || currkz > size(labels,2) || ...
+                DCEPhase < 1 || DCEPhase > size(labels,3)
+            skippedReadouts = skippedReadouts + 1;
+            continue
+        end
         
         % check to see if this readout line already has data, if yes average,
         % if no simply fill in kspace
@@ -39,7 +50,11 @@ if isCartesian
         kspace_averages(:,:,labelInd) = kspace_averages(:,:,labelInd) + 1;
         
     end
-    
+    if skippedReadouts > 0
+        warning('sortDCEKspace:SkippedReadouts', ...
+            'Skipped %d readouts with ky/kz/DCE indices outside [%d %d %d]. Recalculate trajectory after loading GT if this is unexpected.', ...
+            skippedReadouts, size(labels,1), size(labels,2), size(labels,3));
+    end
     % Normalize by number of averages
     kspace_sorted = kspace_sorted./single(kspace_averages);
     kspace_sorted(isnan(kspace_sorted)) = complex(0);     % correct for NaN because of division by zero in case of missing k-lines
