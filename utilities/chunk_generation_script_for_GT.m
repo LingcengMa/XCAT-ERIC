@@ -9,6 +9,8 @@ app.gtChunkDir = gtChunkDir;
 app.framesPerChunk = 120;
 app.gtMaxFrames = [];
 %%
+app.sampleOnlyNoRecon = true;
+%%
 app.useGTChunkMode = true;
 outDir = '/mnt/local_raid/lingcengma/XCAT_results';
 framesPerChunk = 100;

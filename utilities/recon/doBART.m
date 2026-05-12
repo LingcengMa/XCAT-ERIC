@@ -1,5 +1,14 @@
 function outputImg = doBART(kspace)
-
+if exist('writecfl','file') ~= 2 || exist('readcfl','file') ~= 2
+    error(['doBART requires the BART MATLAB helpers writecfl/readcfl on the MATLAB path. ' ...
+        'Install BART and add its matlab folder to the path, or select/recalculate a non-Cartesian trajectory ' ...
+        'if you intended to use non-Cartesian reconstruction.']);
+end
+if exist('bart','file') ~= 2 && isempty(getenv('TOOLBOX_PATH')) && ...
+        exist('/usr/local/bin/bart','file') ~= 2 && exist('/usr/bin/bart','file') ~= 2
+    error(['doBART requires the BART executable. Set TOOLBOX_PATH or install bart in /usr/local/bin or /usr/bin. ' ...
+        'If you intended non-Cartesian reconstruction, select Stack-of-stars or Stack-of-spirals and recalculate trajectory.']);
+end
 % to image space along the readout direction
 tmpKSP = (ifft(kspace,[],1));
 nPE = size(kspace,1);
