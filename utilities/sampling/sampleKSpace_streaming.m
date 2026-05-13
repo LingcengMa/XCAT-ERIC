@@ -14,8 +14,26 @@ if FOV(3) ~= 35
     SP(round(FOV(3)/2+1:end)) = SP(floor(FOV(3)/2):-1:1);
 end
 
-nReadouts = size(app.kx_samples,2);
-nFE = size(app.kx_samples,1);
+traj = struct();
+if ~isCartesian
+    [useStackOfStars, thetaFile, kyFile, kzFile] = getStackOfStarsFiles(app);
+    if useStackOfStars
+        [traj, trajMeta] = buildStackOfStarsTrajectory(app, thetaFile, kyFile, kzFile);
+    else
+        [traj.kx, traj.ky] = buildGoldenAngleTrajectory(app.kx_samples, app.ky_samples);
+        trajMeta = struct();
+    end
+else
+    trajMeta = struct();
+end
+
+if isfield(traj,'kx')
+    nReadouts = size(traj.kx,2);
+    nFE = size(traj.kx,1);
+else
+    nReadouts = size(app.kx_samples,2);
+    nFE = size(app.kx_samples,1);
+end
 
 % Optional chunked streaming to avoid holding full 4D-equivalent outputs in memory.
 chunkSize = 0;
@@ -44,20 +62,30 @@ end
 % Navigator sampling interval (default every readout). Set app.navigatorEveryN = 7
 % to acquire one navigator every 7 k-space lines.
 navEvery = 1;
+if isfield(traj,'isStackOfStars') && traj.isStackOfStars
+    navEvery = 7;
+end
 if isprop(app,'navigatorEveryN') && ~isempty(app.navigatorEveryN)
     navEvery = max(1,round(app.navigatorEveryN));
 end
-navReadouts = 1:navEvery:nReadouts;
+navStartsAfterKspace = isfield(traj,'isStackOfStars') && traj.isStackOfStars;
+if isprop(app,'navigatorAfterKspace') && ~isempty(app.navigatorAfterKspace)
+    navStartsAfterKspace = logical(app.navigatorAfterKspace);
+end
+if navStartsAfterKspace
+    navReadouts = navEvery:navEvery:nReadouts;
+else
+    navReadouts = 1:navEvery:nReadouts;
+end
 nNav = numel(navReadouts);
+navSamples = FOV(3);
+if isfield(traj,'navigatorAlongKz') && traj.navigatorAlongKz
+    navSamples = size(traj.navKz,1);
+end
 if chunkSize > 0 && ~keepFullInMemory
     navigator = [];
 else
-    navigator = complex(zeros(FOV(3),nNav,nCh,'single'));
-end
-
-traj = struct();
-if ~isCartesian
-    [traj.kx, traj.ky] = buildGoldenAngleTrajectory(app.kx_samples, app.ky_samples);
+    navigator = complex(zeros(navSamples,nNav,nCh,'single'));
 end
 
 % Debug trajectory movie options
@@ -103,12 +131,13 @@ end
 if isprop(app,'timing') && ~isempty(app.timing)
     state.frameTimesSec = app.timing;
 end
+state.nReadouts = nReadouts;
 h = waitbar(0,'streaming k-space generation');
 navIdx = 1;
 chunkStartRo = 1;
 if chunkSize > 0
     chunkK = complex(zeros(nFE,chunkSize,nCh,'single'));
-    chunkNav = complex(zeros(FOV(3),chunkSize,nCh,'single'));
+    chunkNav = complex(zeros(navSamples,chunkSize,nCh,'single'));
     chunkNavReadouts = zeros(1,chunkSize,'double');
     chunkCount = 0;
     chunkNavCount = 0;
@@ -133,8 +162,12 @@ for ro = 1:nReadouts
     end
 
     if navIdx <= nNav && ro == navReadouts(navIdx)
-        navLine = squeeze(mean(mean(Coils .* IMG,1),2));
-        navLineK = fftshift(fft(navLine,[],1),1);
+        if isfield(traj,'navigatorAlongKz') && traj.navigatorAlongKz
+            navLineK = encodeNavigatorReadout(IMG, Coils, traj.navKz);
+        else
+            navLineK = encodeNavigatorReadout(IMG, Coils, []);
+        end
+        navLineK = reshape(navLineK, [size(navLineK,1), 1, nCh]);
         if isempty(navigator)
             chunkNavCount = chunkNavCount + 1;
             chunkNav(:,chunkNavCount,:) = navLineK;
@@ -242,11 +275,42 @@ if isprop(app,'saveStreamingData') && app.saveStreamingData
     if ~isempty(outDir) && ~exist(outDir,'dir')
         mkdir(outDir);
     end
-    save(outPath,'kspace','navigator','navReadouts','chunkDir','chunkSize','keepFullInMemory','-v7.3');
+    save(outPath,'kspace','navigator','navReadouts','chunkDir','chunkSize','keepFullInMemory','trajMeta','-v7.3');
     disp(['Saved streaming k-space/navigator data to: ' outPath]);
     if chunkSize > 0
         disp(['Streaming chunk files were written to: ' chunkDir]);
     end
 end
+end
+
+function [useStackOfStars, thetaFile, kyFile, kzFile] = getStackOfStarsFiles(app)
+useStackOfStars = false;
+thetaFile = '';
+kyFile = '';
+kzFile = '';
+if isprop(app,'stackOfStarsTrajectoryDir') && ~isempty(app.stackOfStarsTrajectoryDir)
+    trajDir = app.stackOfStarsTrajectoryDir;
+    thetaFile = fullfile(trajDir,'thetas.txt');
+    kyFile = fullfile(trajDir,'ky.txt');
+    kzFile = fullfile(trajDir,'kz.txt');
+    useStackOfStars = true;
+end
+if isprop(app,'stackOfStarsThetaFile') && ~isempty(app.stackOfStarsThetaFile)
+    thetaFile = app.stackOfStarsThetaFile;
+    useStackOfStars = true;
+end
+if isprop(app,'stackOfStarsKyFile') && ~isempty(app.stackOfStarsKyFile)
+    kyFile = app.stackOfStarsKyFile;
+    useStackOfStars = true;
+end
+if isprop(app,'stackOfStarsKzFile') && ~isempty(app.stackOfStarsKzFile)
+    kzFile = app.stackOfStarsKzFile;
+    useStackOfStars = true;
+end
+if useStackOfStars && (isempty(thetaFile) || isempty(kyFile) || isempty(kzFile))
+    error('Stack-of-stars trajectory requires theta, ky, and kz files.');
+end
+end
+
 
 
