@@ -10,6 +10,14 @@ app.framesPerChunk = 120;
 app.gtMaxFrames = [];
 %%
 app.sampleOnlyNoRecon = true;
+
+%%
+app.saveStreamingData = true;
+app.streamingOutputPath = '/mnt/local_raid/lingcengma/XCAT_results/streaming_summary.mat';
+
+app.streamingChunkSize = 500;
+app.streamingChunkDir = '/mnt/local_raid/lingcengma/XCAT_results/kspace_chunks_full';
+app.keepFullStreamingInMemory = false;
 %%
 app.useGTChunkMode = true;
 outDir = '/mnt/local_raid/lingcengma/XCAT_results';

@@ -183,16 +183,7 @@ if chunkSize > 0 && chunkCount > 0
     navReadoutsChunk = chunkNavReadouts(1:chunkNavCount);
     save(chunkFile,'kspaceChunk','navigatorChunk','roRange','navReadoutsChunk','-v7.3');
 end
-if chunkSize > 0
-    streamManifestPath = fullfile(chunkDir,'stream_manifest.mat');
-    nStreamChunks = chunkId;
-    savedReadouts = nReadouts;
-    savedChunkSize = chunkSize;
-    savedKeepFullInMemory = keepFullInMemory;
-    save(streamManifestPath,'nStreamChunks','savedReadouts','savedChunkSize', ...
-        'savedKeepFullInMemory','navReadouts','-v7.3');
-    fprintf('Saved streaming k-space chunks to: %s\n', chunkDir);
-end
+
 close(h)
 
 if SNR < 100
@@ -247,6 +238,15 @@ if isprop(app,'saveStreamingData') && app.saveStreamingData
     if isprop(app,'streamingOutputPath') && ~isempty(app.streamingOutputPath)
         outPath = app.streamingOutputPath;
     end
-    save(outPath,'kspace','navigator','navReadouts','-v7.3');
+    [outDir,~,~] = fileparts(outPath);
+    if ~isempty(outDir) && ~exist(outDir,'dir')
+        mkdir(outDir);
+    end
+    save(outPath,'kspace','navigator','navReadouts','chunkDir','chunkSize','keepFullInMemory','-v7.3');
+    disp(['Saved streaming k-space/navigator data to: ' outPath]);
+    if chunkSize > 0
+        disp(['Streaming chunk files were written to: ' chunkDir]);
+    end
 end
+
 
