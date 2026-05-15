@@ -39,3 +39,7 @@ app.streamingChunkDir = '/mnt/local_raid/lingcengma/XCAT_results/kspace_chunks_f
 % Optional final summary MAT
 app.saveStreamingData = true;
 app.streamingOutputPath = '/mnt/local_raid/lingcengma/XCAT_results/streaming_summary.mat';
+
+app.gtFramesPerTiming = 168;
+app.gtFrameTimeSec = 1.008/168;  % 0.006 s
+app.samplingTRMs = 0.006*1000;   % 6 ms

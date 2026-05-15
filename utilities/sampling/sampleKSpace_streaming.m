@@ -59,8 +59,9 @@ else
     kspace = complex(zeros(nFE,nReadouts,nCh,'single'));
 end
 
-% Navigator sampling interval (default every readout). Set app.navigatorEveryN = 7
-% to acquire one navigator every 7 k-space lines.
+% Navigator cadence in k-space readouts, not total acquisitions.
+% Set app.navigatorAfterKspace=false for NAV,K,K,K,K,K,K,K,NAV,...
+% Set app.navigatorAfterKspace=true for K,K,K,K,K,K,K,NAV,K,...
 navEvery = 1;
 if isfield(traj,'isStackOfStars') && traj.isStackOfStars
     navEvery = 7;
@@ -78,6 +79,25 @@ else
     navReadouts = 1:navEvery:nReadouts;
 end
 nNav = numel(navReadouts);
+navAcquisitionIndices = zeros(1,nNav,'double');
+if navStartsAfterKspace
+    % K,K,K,K,K,K,K,NAV -> navReadouts 7,14,... -> acquisitions 8,16,...
+    navAcquisitionIndices(:) = navReadouts + (1:nNav);
+    kspaceAcquisitionIndices = (1:nReadouts) + floor(((1:nReadouts)-1)/navEvery);
+else
+    % NAV,K,K,K,K,K,K,K -> navReadouts 1,8,... -> acquisitions 1,9,...
+    navAcquisitionIndices(:) = navReadouts + (0:nNav-1);
+    kspaceAcquisitionIndices = (1:nReadouts) + floor(((1:nReadouts)-1)/navEvery) + 1;
+end
+[frameTimesSec, samplingTRMs, timingMeta] = getSamplingTiming(app, []);
+if ~isempty(frameTimesSec) && isprop(app,'timing')
+    app.timing = frameTimesSec;
+end
+if isprop(app,'samplingTRMs')
+    app.samplingTRMs = samplingTRMs;
+end
+readoutTimesSec = ((kspaceAcquisitionIndices - 1) * samplingTRMs) / 1000;
+navAcquisitionTimesSec = ((navAcquisitionIndices - 1) * samplingTRMs) / 1000;
 navSamples = FOV(3);
 if isfield(traj,'navigatorAlongKz') && traj.navigatorAlongKz
     navSamples = size(traj.navKz,1);
@@ -128,10 +148,13 @@ end
 if isprop(app,'allowLegacyIMGCP')
     state.allowLegacyIMGCP = app.allowLegacyIMGCP;
 end
-if isprop(app,'timing') && ~isempty(app.timing)
-    state.frameTimesSec = app.timing;
+if ~isempty(frameTimesSec)
+    state.frameTimesSec = frameTimesSec;
 end
+state.samplingTRMs = samplingTRMs;
+state.timingMeta = timingMeta;
 state.nReadouts = nReadouts;
+state.readoutTimesSec = readoutTimesSec;
 h = waitbar(0,'streaming k-space generation');
 navIdx = 1;
 chunkStartRo = 1;
@@ -139,6 +162,7 @@ if chunkSize > 0
     chunkK = complex(zeros(nFE,chunkSize,nCh,'single'));
     chunkNav = complex(zeros(navSamples,chunkSize,nCh,'single'));
     chunkNavReadouts = zeros(1,chunkSize,'double');
+    chunkNavAcquisitionIndices = zeros(1,chunkSize,'double');
     chunkCount = 0;
     chunkNavCount = 0;
     chunkId = 0;
@@ -172,12 +196,14 @@ for ro = 1:nReadouts
             chunkNavCount = chunkNavCount + 1;
             chunkNav(:,chunkNavCount,:) = navLineK;
             chunkNavReadouts(chunkNavCount) = ro;
+            chunkNavAcquisitionIndices(chunkNavCount) = navAcquisitionIndices(navIdx);
         else
             navigator(:,navIdx,:) = navLineK;
             if chunkSize > 0
                 chunkNavCount = chunkNavCount + 1;
                 chunkNav(:,chunkNavCount,:) = navLineK;
                 chunkNavReadouts(chunkNavCount) = ro;
+                chunkNavAcquisitionIndices(chunkNavCount) = navAcquisitionIndices(navIdx);
             end
         end
         navIdx = navIdx + 1;
@@ -200,9 +226,13 @@ for ro = 1:nReadouts
         kspaceChunk = chunkK(:,1:chunkCount,:);
         navigatorChunk = chunkNav(:,1:chunkNavCount,:);
         navReadoutsChunk = chunkNavReadouts(1:chunkNavCount);
-        save(chunkFile,'kspaceChunk','navigatorChunk','roRange','navReadoutsChunk','-v7.3');
+        navAcquisitionIndicesChunk = chunkNavAcquisitionIndices(1:chunkNavCount);
+        navAcquisitionTimesSecChunk = ((navAcquisitionIndicesChunk - 1) * samplingTRMs) / 1000;
+        kspaceAcquisitionIndicesChunk = kspaceAcquisitionIndices(roRange);
+        readoutTimesSecChunk = readoutTimesSec(roRange);
+        save(chunkFile,'kspaceChunk','navigatorChunk','roRange','navReadoutsChunk','navAcquisitionIndicesChunk','navAcquisitionTimesSecChunk','kspaceAcquisitionIndicesChunk','readoutTimesSecChunk','samplingTRMs','-v7.3');
         chunkStartRo = ro + 1;
-        chunkK(:) = 0; chunkNav(:) = 0; chunkNavReadouts(:) = 0;
+        chunkK(:) = 0; chunkNav(:) = 0; chunkNavReadouts(:) = 0; chunkNavAcquisitionIndices(:) = 0;
         chunkCount = 0; chunkNavCount = 0;
     end
 end
@@ -214,7 +244,11 @@ if chunkSize > 0 && chunkCount > 0
     kspaceChunk = chunkK(:,1:chunkCount,:);
     navigatorChunk = chunkNav(:,1:chunkNavCount,:);
     navReadoutsChunk = chunkNavReadouts(1:chunkNavCount);
-    save(chunkFile,'kspaceChunk','navigatorChunk','roRange','navReadoutsChunk','-v7.3');
+    navAcquisitionIndicesChunk = chunkNavAcquisitionIndices(1:chunkNavCount);
+    navAcquisitionTimesSecChunk = ((navAcquisitionIndicesChunk - 1) * samplingTRMs) / 1000;
+    kspaceAcquisitionIndicesChunk = kspaceAcquisitionIndices(roRange);
+    readoutTimesSecChunk = readoutTimesSec(roRange);
+    save(chunkFile,'kspaceChunk','navigatorChunk','roRange','navReadoutsChunk','navAcquisitionIndicesChunk','navAcquisitionTimesSecChunk','kspaceAcquisitionIndicesChunk','readoutTimesSecChunk','samplingTRMs','-v7.3');
 end
 
 close(h)
@@ -266,6 +300,12 @@ end
 if isprop(app,'navigatorReadouts_streaming')
     app.navigatorReadouts_streaming = navReadouts;
 end
+if isprop(app,'navigatorAcquisitionIndices_streaming')
+    app.navigatorAcquisitionIndices_streaming = navAcquisitionIndices;
+end
+if isprop(app,'navigatorAcquisitionTimesSec_streaming')
+    app.navigatorAcquisitionTimesSec_streaming = navAcquisitionTimesSec;
+end
 if isprop(app,'saveStreamingData') && app.saveStreamingData
     outPath = fullfile(app.appPath,'streaming_kspace_navigator.mat');
     if isprop(app,'streamingOutputPath') && ~isempty(app.streamingOutputPath)
@@ -275,7 +315,7 @@ if isprop(app,'saveStreamingData') && app.saveStreamingData
     if ~isempty(outDir) && ~exist(outDir,'dir')
         mkdir(outDir);
     end
-    save(outPath,'kspace','navigator','navReadouts','chunkDir','chunkSize','keepFullInMemory','trajMeta','-v7.3');
+    save(outPath,'kspace','navigator','navReadouts','navAcquisitionIndices','navAcquisitionTimesSec','kspaceAcquisitionIndices','readoutTimesSec','frameTimesSec','samplingTRMs','timingMeta','chunkDir','chunkSize','keepFullInMemory','trajMeta','-v7.3');
     disp(['Saved streaming k-space/navigator data to: ' outPath]);
     if chunkSize > 0
         disp(['Streaming chunk files were written to: ' chunkDir]);
@@ -311,6 +351,38 @@ if useStackOfStars && (isempty(thetaFile) || isempty(kyFile) || isempty(kzFile))
     error('Stack-of-stars trajectory requires theta, ky, and kz files.');
 end
 end
+
+
+function nFrames = countGroundTruthChunkFrames(gtChunkDir)
+files = dir(fullfile(gtChunkDir,'gt_chunk_*.mat'));
+if isempty(files)
+    error('No gt_chunk_*.mat files found in: %s', gtChunkDir);
+end
+nFrames = 0;
+for c = 1:numel(files)
+    chunkPath = fullfile(gtChunkDir,files(c).name);
+    vars = whos('-file',chunkPath);
+    names = {vars.name};
+    gtIdx = strcmp(names,'GTchunk');
+    if ~any(gtIdx)
+        error('Missing GTchunk in %s', chunkPath);
+    end
+    gtSize = vars(gtIdx).size;
+    if numel(gtSize) < 4
+        gtSize(4) = 1;
+    end
+    if all(ismember({'fStart','fEnd'},names))
+        s = load(chunkPath,'fStart','fEnd');
+        nFrames = max(nFrames, double(s.fEnd));
+    elseif all(ismember({'i1','i2'},names))
+        s = load(chunkPath,'i1','i2');
+        nFrames = max(nFrames, double(s.i2));
+    else
+        nFrames = nFrames + gtSize(4);
+    end
+end
+end
+
 
 
 

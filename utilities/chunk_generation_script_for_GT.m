@@ -1,12 +1,12 @@
 outDir = '/mnt/local_raid/lingcengma/XCAT_results';
 
 app.useGTChunkMode = true;
-gtChunkDir = fullfile(outDir,'gt_chunks_test_copy_20260507');
+gtChunkDir = fullfile(outDir,'gt_chunks_test_copy_20260514');
 if ~exist(gtChunkDir,'dir')
     mkdir(gtChunkDir);
 end
 app.gtChunkDir = gtChunkDir;
-app.framesPerChunk = 120;
+app.framesPerChunk = 168*4;
 app.gtMaxFrames = [];
 %%
 app.sampleOnlyNoRecon = true;
