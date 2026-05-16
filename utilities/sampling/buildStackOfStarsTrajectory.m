@@ -133,3 +133,4 @@ if isprop(app,propertyName) && ~isempty(app.(propertyName))
 end
 value = round(value(1));
 end
+

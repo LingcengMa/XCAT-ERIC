@@ -5,7 +5,11 @@ if nargin < 3 || isempty(state)
     state = struct();
 end
 
-t_ms = (ro-1) * app.TR_sim.Value;
+if isfield(state,'readoutTimesSec') && numel(state.readoutTimesSec) >= ro
+    t_ms = state.readoutTimesSec(ro) * 1000;
+else
+    t_ms = (ro-1) * getStateTRMs(app, state);
+end
 state.lastTimeMs = t_ms;
 
 % Preferred mode: external callback that generates one volume on demand.
@@ -23,11 +27,19 @@ if isfield(state,'gtChunkDir') && ~isempty(state.gtChunkDir)
 
     % Build readout->frame mapping once using frame times if provided.
     if ~isfield(state,'roToFrame')
-        if isfield(state,'frameTimesSec')
-            nReadouts = size(app.kx_samples,2);
-            state.roToFrame = buildReadoutToFrameMap(nReadouts, app.TR_sim.Value, state.frameTimesSec);
+        if isfield(state,'nReadouts') && ~isempty(state.nReadouts)
+            nReadouts = state.nReadouts;
         else
-            state.roToFrame = 1:size(app.kx_samples,2);
+            nReadouts = size(app.kx_samples,2);
+        end
+        if isfield(state,'frameTimesSec')
+            readoutTimesSec = [];
+            if isfield(state,'readoutTimesSec')
+                readoutTimesSec = state.readoutTimesSec;
+            end
+            state.roToFrame = buildReadoutToFrameMap(nReadouts, getStateTRMs(app, state), state.frameTimesSec, readoutTimesSec);
+        else
+            state.roToFrame = 1:nReadouts;
         end
     end
 
@@ -59,8 +71,9 @@ end
 if allowLegacy && isprop(app,'IMG_CP') && ~isempty(app.IMG_CP)
     nPhases = size(app.IMG_CP,4);
     nFE = size(app.kx_samples,2);
-    readoutTiming = 0:app.TR_sim.Value:(nFE-1)*app.TR_sim.Value;
-    sortedROs = sortReadOuts(nPhases, app.timing*1000, nFE, readoutTiming);
+    [frameTimesSec, samplingTRMs] = getSamplingTiming(app, nPhases);
+    readoutTiming = 0:samplingTRMs:(nFE-1)*samplingTRMs;
+    sortedROs = sortReadOuts(nPhases, frameTimesSec*1000, nFE, readoutTiming);
     phaseIdx = sortedROs(ro);
     phaseIdx = max(1,min(nPhases,phaseIdx));
     IMG = app.IMG_CP(:,:,:,phaseIdx);
@@ -69,6 +82,11 @@ else
         'Use state.volumeGenerator or state.gtChunkDir for chunked GT loading. ' ...
         'Legacy app.IMG_CP fallback is disabled by default.']);
 end
-
-
-
+end
+    function trMs = getStateTRMs(app, state)
+        if isfield(state,'samplingTRMs') && ~isempty(state.samplingTRMs)
+            trMs = state.samplingTRMs;
+        else
+            trMs = app.TR_sim.Value;
+        end
+    end

@@ -10,36 +10,30 @@ app.streamingChunkDir = '/mnt/local_raid/lingcengma/XCAT_results/kspace_chunks_f
 app.keepFullStreamingInMemory = false;
 %%
 % Use the GT chunks you already generated
-app.gtChunkDir = '/mnt/local_raid/lingcengma/XCAT_results/gt_chunks_test_copy_20260507';
-app.framesPerChunk = 120;  % must match GT generation
+app.gtChunkDir = '/mnt/local_raid/lingcengma/XCAT_results/gt_chunks_test_copy_20260514';
+app.framesPerChunk = 168*4;  % must match GT generation
 
-% Enable streaming sampling
 app.useStreaming = true;
 app.allowLegacyIMGCP = false;
-
-% Non-Cartesian stack-of-stars sampling
 app.isCartesian = false;
 
-% Folder containing thetas.txt, ky.txt, kz.txt
-app.stackOfStarsTrajectoryDir = '/home/lingcengma/CODE/XCAT-ERIC';
+% Old GT compatibility / SR-GRE local timing
+app.gtFramesPerTiming = 168;
+app.gtFrameTimeSec = 1.008 / 168;   % 0.006 sec
+app.samplingTRMs = [];              % let getSamplingTiming derive 6 ms, or set 6 explicitly
 
-% Your acquisition assumptions
-app.stackOfStarsDiscardLines = 168;  % first 168 fixed startup k-space lines
-app.stackOfStarsKzSamples = 44;      % 1.7 mm -> 4 mm kz downsampling
-
-% Navigator after every 7 k-space acquisitions
+% NAV then 7 k-space readouts
 app.navigatorEveryN = 7;
 app.navigatorAfterKspace = false;
 
-% Save sampling output in chunks
+% Stack-of-stars files
+app.stackOfStarsTrajectoryDir = '/mnt/local_raid/lingcengma/XCAT_results/trajectory_files';
+app.stackOfStarsDiscardLines = 168;
+app.stackOfStarsKzSamples = 44;
+
+% Save chunked sampling output
 app.streamingChunkSize = 500;
 app.keepFullStreamingInMemory = false;
 app.streamingChunkDir = '/mnt/local_raid/lingcengma/XCAT_results/kspace_chunks_full';
-
-% Optional final summary MAT
 app.saveStreamingData = true;
 app.streamingOutputPath = '/mnt/local_raid/lingcengma/XCAT_results/streaming_summary.mat';
-
-app.gtFramesPerTiming = 168;
-app.gtFrameTimeSec = 1.008/168;  % 0.006 s
-app.samplingTRMs = 0.006*1000;   % 6 ms
