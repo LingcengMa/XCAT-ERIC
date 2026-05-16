@@ -70,7 +70,8 @@ traj.kyOrder = kyOrder;
 traj.kzOrder = kzOrder;
 traj.isStackOfStars = true;
 traj.navigatorAlongKz = true;
-traj.navKz = cast(r * app.matrixFH,'like',app.kz_samples);
+traj.kzConvention = 'centered';
+traj.navKz = cast(linspace(-floor(app.matrixFH/2), ceil(app.matrixFH/2)-1, nFE).','like',app.kz_samples);
 traj.navKx = zeros(nFE,1,'like',app.kx_samples);
 traj.navKy = zeros(nFE,1,'like',app.ky_samples);
 
@@ -133,4 +134,3 @@ if isprop(app,propertyName) && ~isempty(app.(propertyName))
 end
 value = round(value(1));
 end
-

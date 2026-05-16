@@ -7,7 +7,11 @@ end
 
 FOV = size(IMG);
 nCh = size(Coils,4);
-nFE = size(app.kx_samples,1);
+if isfield(traj,'kx')
+    nFE = size(traj.kx,1);
+else
+    nFE = size(app.kx_samples,1);
+end
 
 kout = complex(zeros(nFE,1,nCh,'single'));
 
@@ -38,12 +42,20 @@ else
         kx = app.kx_samples(:,ro);
         ky = app.ky_samples(:,ro);
     end
-    kz = app.kz_samples(:,ro);
+    if isfield(traj,'kz')
+        kz = traj.kz(:,ro);
+    else
+        kz = app.kz_samples(:,ro);
+    end
+    kzConvention = 'auto';
+    if isfield(traj,'kzConvention')
+        kzConvention = traj.kzConvention;
+    elseif isfield(traj,'isStackOfStars') && traj.isStackOfStars
+        kzConvention = 'centered';
+    end
 
     for coil = 1:nCh
         tmp = Coils(:,:,:,coil) .* IMG .* sliceProfile;
-        kout(:,1,coil) = encodeOneNonCartesianReadout(tmp, kx, ky, kz, app);
+        kout(:,1,coil) = encodeOneNonCartesianReadout(tmp, kx, ky, kz, app, kzConvention);
     end
 end
-
-

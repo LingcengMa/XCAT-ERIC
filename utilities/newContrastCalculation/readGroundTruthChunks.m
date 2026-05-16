@@ -4,8 +4,10 @@ function [GT, frameTimesSec, meta] = readGroundTruthChunks(gtChunkDir, frameTime
 %   loads GTchunk variables from all gt_chunk_####.mat files in gtChunkDir
 %   and concatenates them into one 4D array GT(:,:,:,frame).
 %
-%   frameTimeSec is optional. For your 2.016 s GT resolution, call:
-%       [GT,t,meta] = readGroundTruthChunks(gtChunkDir,2.016);
+%   frameTimeSec is optional. For SR-GRE chunks with 168 local frames per
+%   contrast sample, use contrastSamplingSec/168. For example, if contrast
+%   sampling is 1.008 s, the GT frame spacing is 1.008/168 = 0.006 s:
+%       [GT,t,meta] = readGroundTruthChunks(gtChunkDir,0.006);
 %
 %   This reconstructs the full GT movie in memory. For very large runs, use
 %   the chunk files directly instead of concatenating all frames.

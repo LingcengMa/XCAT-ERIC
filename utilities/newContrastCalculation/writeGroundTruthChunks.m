@@ -66,4 +66,3 @@ fid = fopen(statusFile,'a');
 fprintf(fid,'GT chunk generation completed: %s\n', datestr(now));
 fclose(fid);
 end
-

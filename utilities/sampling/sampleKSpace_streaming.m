@@ -89,7 +89,11 @@ else
     navAcquisitionIndices(:) = navReadouts + (0:nNav-1);
     kspaceAcquisitionIndices = (1:nReadouts) + floor(((1:nReadouts)-1)/navEvery) + 1;
 end
-[frameTimesSec, samplingTRMs, timingMeta] = getSamplingTiming(app, []);
+nGTFrames = [];
+if isprop(app,'gtChunkDir') && ~isempty(app.gtChunkDir)
+    nGTFrames = countGroundTruthChunkFrames(app.gtChunkDir);
+end
+[frameTimesSec, samplingTRMs, timingMeta] = getSamplingTiming(app, nGTFrames);
 if ~isempty(frameTimesSec) && isprop(app,'timing')
     app.timing = frameTimesSec;
 end
@@ -98,6 +102,9 @@ if isprop(app,'samplingTRMs')
 end
 readoutTimesSec = ((kspaceAcquisitionIndices - 1) * samplingTRMs) / 1000;
 navAcquisitionTimesSec = ((navAcquisitionIndices - 1) * samplingTRMs) / 1000;
+validateGroundTruthCoverage(app, frameTimesSec, readoutTimesSec, navAcquisitionTimesSec, samplingTRMs);
+readoutGTFrameIndices = mapTimesToFrameIndices(frameTimesSec, readoutTimesSec);
+navGTFrameIndices = mapTimesToFrameIndices(frameTimesSec, navAcquisitionTimesSec);
 navSamples = FOV(3);
 if isfield(traj,'navigatorAlongKz') && traj.navigatorAlongKz
     navSamples = size(traj.navKz,1);
@@ -163,6 +170,7 @@ if chunkSize > 0
     chunkNav = complex(zeros(navSamples,chunkSize,nCh,'single'));
     chunkNavReadouts = zeros(1,chunkSize,'double');
     chunkNavAcquisitionIndices = zeros(1,chunkSize,'double');
+    chunkNavGTFrameIndices = zeros(1,chunkSize,'double');
     chunkCount = 0;
     chunkNavCount = 0;
     chunkId = 0;
@@ -186,10 +194,14 @@ for ro = 1:nReadouts
     end
 
     if navIdx <= nNav && ro == navReadouts(navIdx)
+        navState = state;
+        navState.overrideTimeSec = navAcquisitionTimesSec(navIdx);
+        [IMGNav,navState] = generateVolumeForReadout(app, ro, navState);
+        state = copyCachedGTState(state, navState);
         if isfield(traj,'navigatorAlongKz') && traj.navigatorAlongKz
-            navLineK = encodeNavigatorReadout(IMG, Coils, traj.navKz);
+            navLineK = encodeNavigatorReadout(IMGNav, Coils, traj.navKz);
         else
-            navLineK = encodeNavigatorReadout(IMG, Coils, []);
+            navLineK = encodeNavigatorReadout(IMGNav, Coils, []);
         end
         navLineK = reshape(navLineK, [size(navLineK,1), 1, nCh]);
         if isempty(navigator)
@@ -197,6 +209,7 @@ for ro = 1:nReadouts
             chunkNav(:,chunkNavCount,:) = navLineK;
             chunkNavReadouts(chunkNavCount) = ro;
             chunkNavAcquisitionIndices(chunkNavCount) = navAcquisitionIndices(navIdx);
+            chunkNavGTFrameIndices(chunkNavCount) = navGTFrameIndices(navIdx);
         else
             navigator(:,navIdx,:) = navLineK;
             if chunkSize > 0
@@ -204,6 +217,7 @@ for ro = 1:nReadouts
                 chunkNav(:,chunkNavCount,:) = navLineK;
                 chunkNavReadouts(chunkNavCount) = ro;
                 chunkNavAcquisitionIndices(chunkNavCount) = navAcquisitionIndices(navIdx);
+                chunkNavGTFrameIndices(chunkNavCount) = navGTFrameIndices(navIdx);
             end
         end
         navIdx = navIdx + 1;
@@ -227,12 +241,14 @@ for ro = 1:nReadouts
         navigatorChunk = chunkNav(:,1:chunkNavCount,:);
         navReadoutsChunk = chunkNavReadouts(1:chunkNavCount);
         navAcquisitionIndicesChunk = chunkNavAcquisitionIndices(1:chunkNavCount);
+        navGTFrameIndicesChunk = chunkNavGTFrameIndices(1:chunkNavCount);
         navAcquisitionTimesSecChunk = ((navAcquisitionIndicesChunk - 1) * samplingTRMs) / 1000;
         kspaceAcquisitionIndicesChunk = kspaceAcquisitionIndices(roRange);
         readoutTimesSecChunk = readoutTimesSec(roRange);
-        save(chunkFile,'kspaceChunk','navigatorChunk','roRange','navReadoutsChunk','navAcquisitionIndicesChunk','navAcquisitionTimesSecChunk','kspaceAcquisitionIndicesChunk','readoutTimesSecChunk','samplingTRMs','-v7.3');
+        readoutGTFrameIndicesChunk = readoutGTFrameIndices(roRange);
+        save(chunkFile,'kspaceChunk','navigatorChunk','roRange','navReadoutsChunk','navAcquisitionIndicesChunk','navAcquisitionTimesSecChunk','navGTFrameIndicesChunk','kspaceAcquisitionIndicesChunk','readoutTimesSecChunk','readoutGTFrameIndicesChunk','samplingTRMs','-v7.3');
         chunkStartRo = ro + 1;
-        chunkK(:) = 0; chunkNav(:) = 0; chunkNavReadouts(:) = 0; chunkNavAcquisitionIndices(:) = 0;
+        chunkK(:) = 0; chunkNav(:) = 0; chunkNavReadouts(:) = 0; chunkNavAcquisitionIndices(:) = 0; chunkNavGTFrameIndices(:) = 0;
         chunkCount = 0; chunkNavCount = 0;
     end
 end
@@ -245,10 +261,12 @@ if chunkSize > 0 && chunkCount > 0
     navigatorChunk = chunkNav(:,1:chunkNavCount,:);
     navReadoutsChunk = chunkNavReadouts(1:chunkNavCount);
     navAcquisitionIndicesChunk = chunkNavAcquisitionIndices(1:chunkNavCount);
+    navGTFrameIndicesChunk = chunkNavGTFrameIndices(1:chunkNavCount);
     navAcquisitionTimesSecChunk = ((navAcquisitionIndicesChunk - 1) * samplingTRMs) / 1000;
     kspaceAcquisitionIndicesChunk = kspaceAcquisitionIndices(roRange);
     readoutTimesSecChunk = readoutTimesSec(roRange);
-    save(chunkFile,'kspaceChunk','navigatorChunk','roRange','navReadoutsChunk','navAcquisitionIndicesChunk','navAcquisitionTimesSecChunk','kspaceAcquisitionIndicesChunk','readoutTimesSecChunk','samplingTRMs','-v7.3');
+    readoutGTFrameIndicesChunk = readoutGTFrameIndices(roRange);
+    save(chunkFile,'kspaceChunk','navigatorChunk','roRange','navReadoutsChunk','navAcquisitionIndicesChunk','navAcquisitionTimesSecChunk','navGTFrameIndicesChunk','kspaceAcquisitionIndicesChunk','readoutTimesSecChunk','readoutGTFrameIndicesChunk','samplingTRMs','-v7.3');
 end
 
 close(h)
@@ -315,11 +333,51 @@ if isprop(app,'saveStreamingData') && app.saveStreamingData
     if ~isempty(outDir) && ~exist(outDir,'dir')
         mkdir(outDir);
     end
-    save(outPath,'kspace','navigator','navReadouts','navAcquisitionIndices','navAcquisitionTimesSec','kspaceAcquisitionIndices','readoutTimesSec','frameTimesSec','samplingTRMs','timingMeta','chunkDir','chunkSize','keepFullInMemory','trajMeta','-v7.3');
+    save(outPath,'kspace','navigator','navReadouts','navAcquisitionIndices','navAcquisitionTimesSec','navGTFrameIndices','kspaceAcquisitionIndices','readoutTimesSec','readoutGTFrameIndices','frameTimesSec','samplingTRMs','timingMeta','chunkDir','chunkSize','keepFullInMemory','trajMeta','-v7.3');
     disp(['Saved streaming k-space/navigator data to: ' outPath]);
     if chunkSize > 0
         disp(['Streaming chunk files were written to: ' chunkDir]);
     end
+end
+end
+
+
+
+function frameIdx = mapTimesToFrameIndices(frameTimesSec, queryTimesSec)
+if isempty(frameTimesSec) || isempty(queryTimesSec)
+    frameIdx = [];
+    return
+end
+frameIdx = ones(size(queryTimesSec));
+for i = 1:numel(queryTimesSec)
+    [~,idx] = min(abs(frameTimesSec - queryTimesSec(i)));
+    frameIdx(i) = idx;
+end
+end
+
+function validateGroundTruthCoverage(app, frameTimesSec, readoutTimesSec, navAcquisitionTimesSec, samplingTRMs)
+if isempty(frameTimesSec) || isempty(readoutTimesSec)
+    return
+end
+allowPartialGT = false;
+if isprop(app,'allowPartialGTForSampling') && ~isempty(app.allowPartialGTForSampling)
+    allowPartialGT = logical(app.allowPartialGTForSampling);
+end
+if allowPartialGT
+    return
+end
+requiredEndSec = max(readoutTimesSec);
+if ~isempty(navAcquisitionTimesSec)
+    requiredEndSec = max(requiredEndSec, max(navAcquisitionTimesSec));
+end
+gtEndSec = max(frameTimesSec);
+toleranceSec = max(double(samplingTRMs)/1000, eps);
+if requiredEndSec > gtEndSec + toleranceSec
+    error('sampleKSpace_streaming:IncompleteGroundTruth', ...
+        ['GT chunks/timing only cover %.2f min, but the sampling trajectory requires %.2f min. ' ...
+        'Finish GT generation before sampling or shorten the sampling trajectory. ' ...
+        'To intentionally reuse the last available GT frame, add an allowPartialGTForSampling app property and set it true.'], ...
+        gtEndSec/60, requiredEndSec/60);
 end
 end
 
@@ -353,6 +411,16 @@ end
 end
 
 
+
+function state = copyCachedGTState(state, navState)
+cacheFields = {'cachedChunk','cachedChunkId','gtChunkIndex'};
+for i = 1:numel(cacheFields)
+    if isfield(navState, cacheFields{i})
+        state.(cacheFields{i}) = navState.(cacheFields{i});
+    end
+end
+end
+
 function nFrames = countGroundTruthChunkFrames(gtChunkDir)
 files = dir(fullfile(gtChunkDir,'gt_chunk_*.mat'));
 if isempty(files)
@@ -377,12 +445,11 @@ for c = 1:numel(files)
     elseif all(ismember({'i1','i2'},names))
         s = load(chunkPath,'i1','i2');
         nFrames = max(nFrames, double(s.i2));
+    elseif all(ismember({'roStart','roEnd'},names))
+        s = load(chunkPath,'roStart','roEnd');
+        nFrames = max(nFrames, double(s.roEnd));
     else
         nFrames = nFrames + gtSize(4);
     end
 end
 end
-
-
-
-

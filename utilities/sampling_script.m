@@ -1,17 +1,10 @@
 %%
 app.sampleOnlyNoRecon = true;
 
-%%
-app.saveStreamingData = true;
-app.streamingOutputPath = '/mnt/local_raid/lingcengma/XCAT_results/streaming_summary.mat';
-
-app.streamingChunkSize = 500;
-app.streamingChunkDir = '/mnt/local_raid/lingcengma/XCAT_results/kspace_chunks_full';
-app.keepFullStreamingInMemory = false;
-%%
 % Use the GT chunks you already generated
 app.gtChunkDir = '/mnt/local_raid/lingcengma/XCAT_results/gt_chunks_test_copy_20260514';
 app.framesPerChunk = 168*4;  % must match GT generation
+     % must match how GT chunks were generated
 
 app.useStreaming = true;
 app.allowLegacyIMGCP = false;
@@ -27,7 +20,7 @@ app.navigatorEveryN = 7;
 app.navigatorAfterKspace = false;
 
 % Stack-of-stars files
-app.stackOfStarsTrajectoryDir = '/mnt/local_raid/lingcengma/XCAT_results/trajectory_files';
+app.stackOfStarsTrajectoryDir = '/home/lingcengma/CODE/XCAT-ERIC';
 app.stackOfStarsDiscardLines = 168;
 app.stackOfStarsKzSamples = 44;
 

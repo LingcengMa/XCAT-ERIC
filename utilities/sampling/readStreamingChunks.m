@@ -12,6 +12,8 @@ function [kspace, navigator, navReadouts, meta] = readStreamingChunks(chunkDir)
 %       navAcquisitionIndicesChunk (optional) full acquisition indices for navigatorChunk
 %       navAcquisitionTimesSecChunk (optional) navigator acquisition times
 %       kspaceAcquisitionIndicesChunk (optional) full acquisition indices for kspaceChunk
+%       navGTFrameIndicesChunk (optional) GT frame indices used by navigatorChunk
+%       readoutGTFrameIndicesChunk (optional) GT frame indices used by kspaceChunk
 %
 %   Outputs:
 %       kspace       [nFE nReadouts nCh]
@@ -66,7 +68,9 @@ navigator = complex(zeros(nZ,nNav,nCh,'like',first.navigatorChunk));
 navReadouts = zeros(1,nNav,'double');
 navAcquisitionIndices = zeros(1,nNav,'double');
 navAcquisitionTimesSec = nan(1,nNav,'double');
+navGTFrameIndices = zeros(1,nNav,'double');
 kspaceAcquisitionIndices = zeros(1,nReadouts,'double');
+readoutGTFrameIndices = zeros(1,nReadouts,'double');
 
 % Second pass: fill outputs.
 navOffset = 0;
@@ -79,6 +83,9 @@ for c = 1:numel(files)
         kspaceAcquisitionIndices(dat.roRange) = dat.kspaceAcquisitionIndicesChunk;
     else
         kspaceAcquisitionIndices(dat.roRange) = dat.roRange;
+    end
+    if isfield(dat,'readoutGTFrameIndicesChunk')
+        readoutGTFrameIndices(dat.roRange) = dat.readoutGTFrameIndicesChunk;
     end
 
     nNavChunk = numel(dat.navReadoutsChunk);
@@ -93,6 +100,9 @@ for c = 1:numel(files)
         end
         if isfield(dat,'navAcquisitionTimesSecChunk')
             navAcquisitionTimesSec(navIdx) = dat.navAcquisitionTimesSecChunk;
+        end
+        if isfield(dat,'navGTFrameIndicesChunk')
+            navGTFrameIndices(navIdx) = dat.navGTFrameIndicesChunk;
         end
         navOffset = navOffset + nNavChunk;
     end
@@ -109,5 +119,7 @@ meta.nZ = nZ;
 meta.nNav = nNav;
 meta.navAcquisitionIndices = navAcquisitionIndices;
 meta.navAcquisitionTimesSec = navAcquisitionTimesSec;
+meta.navGTFrameIndices = navGTFrameIndices;
 meta.kspaceAcquisitionIndices = kspaceAcquisitionIndices;
+meta.readoutGTFrameIndices = readoutGTFrameIndices;
 end

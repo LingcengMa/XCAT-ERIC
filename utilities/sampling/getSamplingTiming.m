@@ -28,8 +28,16 @@ end
 if isempty(frameTimeSec) && hasAppProperty(app,'groundTruthFrameTimeSec') && ~isempty(app.groundTruthFrameTimeSec)
     frameTimeSec = double(app.groundTruthFrameTimeSec);
 end
+contrastSamplingSec = getAppValue(app,'contrastSamplingTime',[]);
+if isempty(frameTimeSec) && ~isempty(contrastSamplingSec) && framesPerTiming > 1
+    frameTimeSec = double(contrastSamplingSec) / framesPerTiming;
+end
 if isempty(frameTimeSec) && ~isempty(baseTimingSec) && framesPerTiming > 1 && numel(baseTimingSec) > 1
-    frameTimeSec = median(diff(baseTimingSec)) / framesPerTiming;
+    timingSteps = diff(unique(baseTimingSec,'stable'));
+    timingSteps = timingSteps(timingSteps > 0);
+    if ~isempty(timingSteps)
+        frameTimeSec = median(timingSteps) / framesPerTiming;
+    end
 end
 if isempty(frameTimeSec)
     frameTimeSec = getTRMs(app) / 1000;
@@ -42,16 +50,35 @@ if isempty(nGTFrames) && ~isempty(baseTimingSec) && framesPerTiming > 1
     nGTFrames = numel(baseTimingSec) * framesPerTiming;
 end
 
+if ~isempty(baseTimingSec) && ~isempty(nGTFrames) && framesPerTiming > 1 && ...
+        nGTFrames == numel(baseTimingSec) && any(diff(baseTimingSec) == 0)
+    uniqueTimingSec = unique(baseTimingSec,'stable');
+    if nGTFrames == numel(uniqueTimingSec) * framesPerTiming
+        baseTimingSec = uniqueTimingSec;
+    end
+end
+
 frameTimesSec = [];
 expandedTiming = false;
 if ~isempty(explicitFrameTimesSec)
-    frameTimesSec = explicitFrameTimesSec;
-    if isempty(nGTFrames)
-        nGTFrames = numel(frameTimesSec);
-    elseif nGTFrames < numel(frameTimesSec)
-        frameTimesSec = frameTimesSec(1:nGTFrames);
+    if isempty(nGTFrames) || nGTFrames == numel(explicitFrameTimesSec)
+        frameTimesSec = explicitFrameTimesSec;
+        if isempty(nGTFrames)
+            nGTFrames = numel(frameTimesSec);
+        end
+        expandedTiming = numel(frameTimesSec) ~= numel(baseTimingSec);
+    elseif framesPerTiming > 1 && nGTFrames == numel(explicitFrameTimesSec) * framesPerTiming
+        % Backward compatibility: GT chunks contain all local frames while
+        % app.gtFrameTimesSec/app.timing still contains only coarse contrast times.
+        offsets = (0:framesPerTiming-1) * frameTimeSec;
+        frameTimesSec = reshape((explicitFrameTimesSec(:) + offsets).', 1, []);
+        expandedTiming = true;
+    else
+        % Stale explicit timing should not force all readouts into the first
+        % chunk. Build dense timing from the actual GT chunk frame count.
+        frameTimesSec = explicitFrameTimesSec(1) + (0:nGTFrames-1) * frameTimeSec;
+        expandedTiming = true;
     end
-    expandedTiming = numel(frameTimesSec) ~= numel(baseTimingSec);
 elseif ~isempty(baseTimingSec)
     if ~isempty(nGTFrames) && nGTFrames == numel(baseTimingSec) * framesPerTiming
         offsets = (0:framesPerTiming-1) * frameTimeSec;
@@ -99,7 +126,20 @@ end
 end
 
 function trMs = getTRMs(app)
-trMs = double(app.TR_sim.Value);
+trMs = double(getAppValue(app,'TR_sim',[]));
+end
+
+function value = getAppValue(app, propName, defaultValue)
+value = defaultValue;
+if ~hasAppProperty(app, propName) || isempty(app.(propName))
+    return
+end
+propValue = app.(propName);
+if isobject(propValue) && isprop(propValue,'Value')
+    value = propValue.Value;
+else
+    value = propValue;
+end
 end
 
 function nFrames = inferGroundTruthFrameCount(app)
@@ -141,6 +181,9 @@ for c = 1:numel(files)
     elseif all(ismember({'i1','i2'},names))
         s = load(chunkPath,'i1','i2');
         nFrames = max(nFrames, double(s.i2));
+    elseif all(ismember({'roStart','roEnd'},names))
+        s = load(chunkPath,'roStart','roEnd');
+        nFrames = max(nFrames, double(s.roEnd));
     else
         nFrames = nFrames + gtSize(4);
     end
